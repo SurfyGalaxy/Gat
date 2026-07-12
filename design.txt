@@ -1,6 +1,41 @@
-[{
+[
+{
+    name: <str>
+    hash: <hash>
+    time: 1783877186 <- of when the diff was made
+}
+{
     line: 0+
     type: "add", "modify", "remove"
     original: <line>
     new: <line>
+}]
+
+
+
+COMMITS:
+
+[
+{
+    Name: <str>
+    Message: <str>
+    Time: <time>
+    Hash: <hash>
+    Files: <list of dicts>
+}
+]
+
+Files:
+
+[{
+    Path: './<path>'
+    Snapshot: main_1783879672.100027
+    Diff: <diff>
+}]
+
+Branches:
+
+[{
+    Name: "Branch"
+    Commits: []
 }]

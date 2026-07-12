@@ -1,6 +1,48 @@
+from datetime import datetime
+from pathlib import Path
+import hashlib
+import json
 import zstandard as zstd # because we don't want too too much disk space taken up
 
-def make_diff(file1, file2):
+def init():
+    Path("./.gat/snapshots").mkdir(parents=True, exist_ok=True)
+    Path("./.gat/commits").mkdir(parents=True, exist_ok=True)
+    Path("./.gat/branches").mkdir(parents=True, exist_ok=True)
+
+def make_commit(files: list, name: str, message: str):
+    readable_time = datetime.now()
+    unix_time = readable_time.timestamp()
+    time_bytes = str(int(unix_time)).encode("utf-8")
+
+    commit = {
+    "Name": name,
+    "Message": message,
+    "Time": readable_time,
+    "Hash": hashlib.md5(time_bytes).hexdigest(),
+    "Files": []
+    }
+    listed_files = []
+    for file in files:
+        file_dict = {
+        "Path": f"./{file}",
+        "Snapshot": make_snapshot(file),
+        "Diff": "" # TODO <- Fix this thing
+        }
+        listed_files.append(file_dict.copy())
+    commit["Files"] = listed_files
+
+    with open(f"./.gat/commits/{commit["Hash"]}", "w") as f:
+        json.dump(commit, final, indent=4)
+
+def make_diff(file1: str, file2: str, name):
+    readable_time = datetime.now()
+    unix_time = readable_time.timestamp()
+    time_bytes = str(int(unix_time)).encode("utf-8")
+    full_diff = [{
+        "Name": name,
+        "Hash": hashlib.md5(time_bytes).hexdigest(),
+        "Time": readable_time
+    }]
     diff = {
         "Line": 1,
         "Type": None,
@@ -35,7 +77,6 @@ def make_diff(file1, file2):
             new_lines.append(None)
             difference -= 1
     
-    full_diff = []
     index = 0
     while index < length:
         original = original_lines[index]
@@ -60,18 +101,27 @@ def make_diff(file1, file2):
         index += 1
     return full_diff
 
-def snapshot(path, compressing, output): # Makes new snapshots or returns existing ones
-    with open(path, "rb") as f:
+def make_snapshot(path): # Makes new snapshots or returns existing ones
+    readable_time = datetime.now()
+    unix_time = readable_time.timestamp()
+    with open(f"./{path}", "rb") as f:
         data = f.read()
     
     compressor = zstd.ZstdCompressor(22)
+    processed = compressor.compress(data)
+
+    with open(f"./.gat/snapshots/{Path(path).stem}_{unix_time}.zst", "wb") as f:
+        f.write(processed)
+    return f"{Path(path).stem}_{unix_time}"
+
+def load_snapshot(name):
+    with open(f"./.gat/snapshots/{name}.zst", "rb") as f:
+        data = f.read()
+
     decompressor = zstd.ZstdDecompressor()
 
-    if compressing:
-        processed = compressor.compress(data)
-    else:
-        processed = decompressor.decompress(data)
-        return processed
+    processed = decompressor.decompress(data)
+    return processed
 
-    with open(f"{output}.zst", "wb") as f:
-        f.write(processed)
+init()
+make_commit(["main.py"], "Gay", "The first test of the new commiting system")
