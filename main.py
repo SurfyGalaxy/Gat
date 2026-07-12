@@ -1,4 +1,9 @@
 def make_diff(file1, file2):
+    diff = {
+        "Line": 1,
+        "Type": None,
+        "Text": ""
+    }
     with open(file1) as f:
         data_original = f.read()
     
@@ -25,20 +30,35 @@ def make_diff(file1, file2):
         length = len(new_lines)
         difference = length - len(original_lines)
         while difference > 0:
-            original_lines.append(True)
+            original_lines.append(None)
             difference -= 1
     else:
         length = len(original_lines)
         difference = length - len(new_lines)
         while difference > 0:
-            new_lines.append(True)
+            new_lines.append(None)
             difference -= 1
     
+    full_diff = []
     index = 0
     while index < length:
-        new_lines[index]
-        original_lines[index]
-    
+        original = original_lines[index]
+        new = new_lines[index]
+        both = (original, new)
+        if original == new: # No need to waste space w/ the same line
+            pass # (Stolen from Gut)
+        else: # There's a change
+            diff["Line"] = index + 1
+            if None in both: # Add/Remove
+                pass
+            else: # Modify
+                diff["Type"] = "Modify"
+                diff["Text"] = new
+                print(diff)
+                full_diff.append(diff)
+                print(full_diff)
+                print("=" * 50)
+            
         index += 1
-
+    return full_diff
 make_diff("no.txt", "yes.txt")
