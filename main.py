@@ -14,17 +14,11 @@ def make_diff(file1, file2):
     new_lines = data_new.split("\n")
 
     if len(original_lines) < len(new_lines):
-        shared_length = len(original_lines)
         new_longer = True
     else:
-        shared_length = len(new_lines)
         new_longer = False
     
     index = 0
-    while index < shared_length:
-        original = original_lines[index]
-        new = new_lines[index]
-        index += 1
     
     if new_longer:
         length = len(new_lines)
@@ -50,15 +44,18 @@ def make_diff(file1, file2):
         else: # There's a change
             diff["Line"] = index + 1
             if None in both: # Add/Remove
-                pass
+                if original is None:
+                    diff["Type"] = "Add"
+                    diff["Text"] = new
+                else:
+                    diff["Type"] = "Remove"
+                    diff["Text"] = original
             else: # Modify
                 diff["Type"] = "Modify"
                 diff["Text"] = new
-                print(diff)
-                full_diff.append(diff)
-                print(full_diff)
-                print("=" * 50)
-            
+        
+            full_diff.append(diff.copy())
         index += 1
     return full_diff
-make_diff("no.txt", "yes.txt")
+
+print(make_diff("no.txt", "yes.txt"))
