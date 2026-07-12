@@ -1,3 +1,5 @@
+import zstandard as zstd # because we don't want too too much disk space taken up
+
 def make_diff(file1, file2):
     diff = {
         "Line": 1,
@@ -58,4 +60,18 @@ def make_diff(file1, file2):
         index += 1
     return full_diff
 
-print(make_diff("no.txt", "yes.txt"))
+def snapshot(path, compressing, output): # Makes new snapshots or returns existing ones
+    with open(path, "rb") as f:
+        data = f.read()
+    
+    compressor = zstd.ZstdCompressor(22)
+    decompressor = zstd.ZstdDecompressor()
+
+    if compressing:
+        processed = compressor.compress(data)
+    else:
+        processed = decompressor.decompress(data)
+        return processed
+
+    with open(f"{output}.zst", "wb") as f:
+        f.write(processed)
