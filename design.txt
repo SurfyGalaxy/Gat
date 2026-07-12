@@ -1,0 +1,6 @@
+[{
+    line: 0+
+    type: "add", "modify", "remove"
+    original: <line>
+    new: <line>
+}]
