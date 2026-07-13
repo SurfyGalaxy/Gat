@@ -241,5 +241,25 @@ def list_branches():
         branches.append(branch["Name"])
     return branches
 
-init()
+def log(name):
+    commits = []
+    with open("./.gat/branches.json") as f:
+        data = json.load(f)
+    for branches in data:
+        if branches["Name"] == name:
+            commits = branches["Commits"]
+    if len(commits) == 0:
+        print(f"Branch '{name}' not found")
+    for commit in commits:
+        with open(f"./.gat/commits/{commit}") as f:
+            data = json.load(f)
+            print(
+f"""Commit {data["Hash"]}:
+  Name: {data["Name"]}
+  Created on: {data["Time"]}
+  Message: {data["Message"]}
+  Files: {', '.join([f['Path'] for f in data['Files']])}
+  """)
 
+init()
+log("Main")
