@@ -7,12 +7,29 @@ import zstandard as zstd # because we don't want too too much disk space taken u
 def init():
     Path("./.gat/snapshots").mkdir(parents=True, exist_ok=True)
     Path("./.gat/commits").mkdir(parents=True, exist_ok=True)
-    Path("./.gat/branches").mkdir(parents=True, exist_ok=True)
 
-def make_commit(files: list, name: str, message: str):
-    readable_time = datetime.now()
-    unix_time = readable_time.timestamp()
+def make_commit(branch: str, files: list, name: str, message: str):
+    existance = True
+    branch_commits = None
+    branch_exists = False
+    readable_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    unix_time = datetime.now().timestamp()
     time_bytes = str(int(unix_time)).encode("utf-8")
+
+    if Path("./.gat/branches.json").is_file():
+        with open("./.gat/branches.json", "r") as f:
+            data = json.load(f)
+            for limb in data:
+                if limb["Name"] == branch:
+                    branch_commits = limb["Commits"]
+                    branch_exists = True
+                    break 
+    else:
+        existance = False
+
+   
+    
+                
 
     commit = {
     "Name": name,
@@ -22,24 +39,46 @@ def make_commit(files: list, name: str, message: str):
     "Files": []
     }
     listed_files = []
+    diff = None
     for file in files:
+        print(file)
+        if branch_commits:
+            target_commit = branch_commits[len(branch_commits) - 1]
+            with open(f"./.gat/commits/{target_commit}") as old_commit:
+                data = json.load(old_commit)
+                for old_file in data["Files"]:
+                    if old_file["Path"] == file:
+                        snapshots = old_file["Snapshot"]
+                        snapshot = load_snapshot(snapshots)
+                        diff = make_diff(snapshot, file)
+
+        if diff is None:
+            diff = "No diff available for this file"
+        
+
         file_dict = {
         "Path": f"./{file}",
         "Snapshot": make_snapshot(file),
-        "Diff": "" # TODO <- Fix this thing
+        "Diff": diff
         }
         listed_files.append(file_dict.copy())
     commit["Files"] = listed_files
 
     with open(f"./.gat/commits/{commit["Hash"]}", "w") as f:
-        json.dump(commit, final, indent=4)
+        json.dump(commit, f, indent=4)
 
-def make_diff(file1: str, file2: str, name):
-    readable_time = datetime.now()
-    unix_time = readable_time.timestamp()
+    
+    if not existance:
+        with open("./.gat/branches.json", "w") as f:
+            json.dump([{"Name": branch, "Commits": [commit["Hash"]]}], f)
+    return commit["Hash"]
+
+def make_diff(file1: str, file2: str):
+    readable_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    unix_time = datetime.now().timestamp()
     time_bytes = str(int(unix_time)).encode("utf-8")
+    empty = True
     full_diff = [{
-        "Name": name,
         "Hash": hashlib.md5(time_bytes).hexdigest(),
         "Time": readable_time
     }]
@@ -48,12 +87,13 @@ def make_diff(file1: str, file2: str, name):
         "Type": None,
         "Text": ""
     }
-    with open(file1) as f:
-        data_original = f.read()
+    data_original = file1
     
-    with open(file2) as f:
-        data_new = f.read()
-    
+    try:
+        with open(file2) as f:
+            data_new = f.read()
+    except UnicodeDecodeError:
+        diff = "Unable to generate diff for this file type"
     original_lines = data_original.split("\n")
     new_lines = data_new.split("\n")
 
@@ -85,6 +125,7 @@ def make_diff(file1: str, file2: str, name):
         if original == new: # No need to waste space w/ the same line
             pass # (Stolen from Gut)
         else: # There's a change
+            empty = False
             diff["Line"] = index + 1
             if None in both: # Add/Remove
                 if original is None:
@@ -99,11 +140,14 @@ def make_diff(file1: str, file2: str, name):
         
             full_diff.append(diff.copy())
         index += 1
+    
+    if empty:
+        return "No changesv in this file"
     return full_diff
 
 def make_snapshot(path): # Makes new snapshots or returns existing ones
-    readable_time = datetime.now()
-    unix_time = readable_time.timestamp()
+    readable_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    unix_time = datetime.now().timestamp()
     with open(f"./{path}", "rb") as f:
         data = f.read()
     
@@ -124,4 +168,4 @@ def load_snapshot(name):
     return processed
 
 init()
-make_commit(["main.py"], "Gay", "The first test of the new commiting system")
+make_commit("Main", ["main.py", "no.txt"], "uwu", "Yet another test")
