@@ -261,5 +261,22 @@ f"""Commit {data["Hash"]}:
   Files: {', '.join([f['Path'] for f in data['Files']])}
   """)
 
+def status(branch, file):
+    target_commit = None
+    with open("./.gat/branches.json") as f:
+        data = json.load(f)
+    for branches in data:
+        if branches["Name"] == branch:
+            target_commit = branches["Commits"][len(branches["Commits"]) - 1]
+    if target_commit is None:
+        print(f"Branch '{branch}' not found")
+        return
+    with open(f"./.gat/commits/{target_commit}") as f:
+        data = json.load(f)
+    for files in data["Files"]:
+        if files["Path"] == file:
+            target_snapshot = files["Snapshot"]
+    print(make_diff(load_snapshot(target_snapshot), file))
+    
 init()
-log("Main")
+status("Main", "./no.txt")
