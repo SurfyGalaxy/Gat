@@ -277,6 +277,37 @@ def status(branch, file):
         if files["Path"] == file:
             target_snapshot = files["Snapshot"]
     print(make_diff(load_snapshot(target_snapshot), file))
-    
+
+# This code is adapted from online research
+dp: Dict[Tuple[str, str], str] = {}
+vs: Dict[Tuple[str, str], int] = {}
+def reverse(s: str) -> str: # The implentation reverses string, this undeos that
+    ans = list(s)
+    u, v = 0, len(ans) - 1
+    while u < v:
+        ans[u], ans[v] = ans[v], ans[u]
+        u += 1
+        v -= 1
+    return "".join(ans)
+def max_str(a: str, b: str) -> str:
+    return a if len(a) > len(b) else b
+def LCS_core(a: str, b: str) -> str:
+    if not a or not b:
+        return ""
+    dp_i = (a, b)
+    if dp_i in vs:
+        return dp[dp_i]
+    else:
+        vs[dp_i] = 1
+    if a[-1] == b[-1]:
+        ans = a[-1] + LCS_core(a[:-1], b[:-1])
+        dp[dp_i] = ans
+        return ans
+    ans = max_str(LCS_core(a[:-1], b), LCS_core(a, b[:-1]))
+    dp[dp_i] = ans
+    return ans
+def LCS(a: str, b: str) -> str:
+    return reverse(LCS_core(a, b))
+
 init()
 status("Main", "./no.txt")
