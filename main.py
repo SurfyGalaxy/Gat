@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import zstandard as zstd # because we don't want too too much disk space taken up
@@ -7,6 +8,7 @@ import zstandard as zstd # because we don't want too too much disk space taken u
 def init():
     Path("./.gat/snapshots").mkdir(parents=True, exist_ok=True)
     Path("./.gat/commits").mkdir(parents=True, exist_ok=True)
+
 
 def make_commit(branch: str, files: list, name: str, message: str):
     existance = True
@@ -33,7 +35,7 @@ def make_commit(branch: str, files: list, name: str, message: str):
                     updated = data.copy()
                     updated.append({
                         "Name": branch,
-                        "Commits": hashlib.md5(time_bytes).hexdigest()
+                        "Commits": [hashlib.md5(time_bytes).hexdigest()]
                      })
         
         with open("./.gat/branches.json", "w") as f:
@@ -187,5 +189,18 @@ def change(commit):
         with open(destination, "w") as f:
             f.write(file_data)
 
+def goto_branch_commit(branch):
+    commits = None
+    with open(f"./.gat/branches.json") as f:
+        data = json.load(f)
+    for file in data:
+        if file["Name"] == branch:
+            commits = file["Commits"]
+    if commits is None:
+        return "Branch not found"
+    else:
+        target_commit = commits[len(commits) - 1]
+        change(target_commit)
+
 init()
-change("02e54773cca839d5479b548fe6e74ddc")
+goto_branch_commit("Main")
