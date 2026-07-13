@@ -16,20 +16,32 @@ def make_commit(branch: str, files: list, name: str, message: str):
     unix_time = datetime.now().timestamp()
     time_bytes = str(int(unix_time)).encode("utf-8")
 
+    updated = []
     if Path("./.gat/branches.json").is_file():
         with open("./.gat/branches.json", "r") as f:
             data = json.load(f)
             for limb in data:
                 if limb["Name"] == branch:
                     branch_commits = limb["Commits"]
+                    target_commit = limb["Commits"][len(limb["Commits"]) - 1]
+                    updated = limb.copy()
+                    updated["Commits"].append(hashlib.md5(time_bytes).hexdigest())
+                    updated = [updated]
                     branch_exists = True
                     break 
+                else:
+                    updated = data.copy()
+                    updated.append({
+                        "Name": branch,
+                        "Commits": hashlib.md5(time_bytes).hexdigest()
+                     })
+        
+        with open("./.gat/branches.json", "w") as f:
+            json.dump(updated, f)
     else:
         existance = False
-
-   
     
-                
+
 
     commit = {
     "Name": name,
@@ -41,13 +53,12 @@ def make_commit(branch: str, files: list, name: str, message: str):
     listed_files = []
     diff = None
     for file in files:
-        print(file)
         if branch_commits:
-            target_commit = branch_commits[len(branch_commits) - 1]
             with open(f"./.gat/commits/{target_commit}") as old_commit:
                 data = json.load(old_commit)
                 for old_file in data["Files"]:
-                    if old_file["Path"] == file:
+                    path = Path(old_file["Path"])
+                    if str(path) == str(file):
                         snapshots = old_file["Snapshot"]
                         snapshot = load_snapshot(snapshots)
                         diff = make_diff(snapshot, file)
@@ -78,15 +89,13 @@ def make_diff(file1: str, file2: str):
     unix_time = datetime.now().timestamp()
     time_bytes = str(int(unix_time)).encode("utf-8")
     empty = True
-    full_diff = [{
-        "Hash": hashlib.md5(time_bytes).hexdigest(),
-        "Time": readable_time
-    }]
+    full_diff = []
     diff = {
         "Line": 1,
         "Type": None,
         "Text": ""
     }
+
     data_original = file1
     
     try:
@@ -164,8 +173,19 @@ def load_snapshot(name):
 
     decompressor = zstd.ZstdDecompressor()
 
-    processed = decompressor.decompress(data)
+    processed = decompressor.decompress(data).decode("utf-8")
     return processed
 
+def change(commit):
+    with open(f"./.gat/commits/{commit}") as f:
+        data = json.load(f)
+    for file in data["Files"]:
+        snapshot = file["Snapshot"]
+        destination = file["Path"]
+
+        file_data = load_snapshot(snapshot)
+        with open(destination, "w") as f:
+            f.write(file_data)
+
 init()
-make_commit("Main", ["main.py", "no.txt"], "uwu", "Yet another test")
+change("02e54773cca839d5479b548fe6e74ddc")
