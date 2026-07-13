@@ -189,18 +189,35 @@ def change(commit):
         with open(destination, "w") as f:
             f.write(file_data)
 
-def goto_branch_commit(branch):
-    commits = None
-    with open(f"./.gat/branches.json") as f:
+def goto_via_name(branch, name):
+    branch_found = False
+    commit_list = []
+
+    with open("./.gat/branches.json") as f:
         data = json.load(f)
     for file in data:
         if file["Name"] == branch:
-            commits = file["Commits"]
-    if commits is None:
-        return "Branch not found"
+            branch_found = True
+            for commit in file["Commits"]:
+                with open(f"./.gat/commits/{commit}") as f:
+                    commit_data = json.load(f)
+                if commit_data["Name"] == name:
+                    commit_list.append(commit_data)
+    if branch_found:
+        if len(commit_list) == 0:
+            print(f"Commit '{name}' not found")
+        elif len(commit_list) > 1:
+            print(
+f"""Multiple commits named '{name}' found.
+Commits found:
+{commit_list}""")
+        else:
+            change(commit_list[0]["Hash"])
+            print(f"Loaded commit '{name}' from '{branch}'")
     else:
-        target_commit = commits[len(commits) - 1]
-        change(target_commit)
+        print(f"Branch '{branch}' not found")
+                
+            
 
 def list_commits(branch):
     commit_list = []
@@ -213,7 +230,7 @@ def list_commits(branch):
                 with open(f"./.gat/commits/{hashes}") as f:
                     commit_data = json.load(f)
                 name = commit_data["Name"]
-                commit_list.append(f"{name} {hashes}")
+                commit_list.append(f"{name} ({hashes})")
     return commit_list
 
 def list_branches():
@@ -224,4 +241,5 @@ def list_branches():
         branches.append(branch["Name"])
     return branches
 
-print(list_commits("Main"))
+init()
+
