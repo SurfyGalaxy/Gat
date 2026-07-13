@@ -202,5 +202,26 @@ def goto_branch_commit(branch):
         target_commit = commits[len(commits) - 1]
         change(target_commit)
 
-init()
-goto_branch_commit("Main")
+def list_commits(branch):
+    commit_list = []
+    with open("./.gat/branches.json") as f:
+        data = json.load(f)
+    for branches in data:
+        if branches["Name"] == branch:
+            commit_hash = branches["Commits"]
+            for hashes in commit_hash:
+                with open(f"./.gat/commits/{hashes}") as f:
+                    commit_data = json.load(f)
+                name = commit_data["Name"]
+                commit_list.append(f"{name} {hashes}")
+    return commit_list
+
+def list_branches():
+    with open("./.gat/branches.json") as f:
+        data = json.load(f)
+    branches = []
+    for branch in data:
+        branches.append(branch["Name"])
+    return branches
+
+print(list_commits("Main"))
