@@ -33,10 +33,14 @@ import zstandard as zstd # because we don't want too too much disk space taken u
 def init():
     Path("./.gat/snapshots").mkdir(parents=True, exist_ok=True)
     Path("./.gat/commits").mkdir(parents=True, exist_ok=True)
-
+    if Path("./.gat/branches.json").is_file():
+        return
+    with open("./.gat/branches.json", "w") as f:
+        json.dump([{"Name": "Main", "Commits": [], "Parent": None}], f, indent=4)
 
 def make_commit(branch: str, files: list, name: str, message: str):
     existance = True
+    target_commit = None
     branch_commits = None
     branch_exists = False
     readable_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -47,28 +51,34 @@ def make_commit(branch: str, files: list, name: str, message: str):
     if Path("./.gat/branches.json").is_file():
         with open("./.gat/branches.json", "r") as f:
             data = json.load(f)
-            for limb in data:
-                if limb["Name"] == branch:
-                    branch_commits = limb["Commits"]
-                    target_commit = limb["Commits"][len(limb["Commits"]) - 1]
-                    updated = limb.copy()
-                    updated["Commits"].append(hashlib.md5(time_bytes).hexdigest())
-                    updated = [updated]
-                    branch_exists = True
-                    break 
+        for limb in data:
+            if limb["Name"] == branch:
+                updated = limb.copy()
+                branch_commits = limb["Commits"]
+                if branch_commits != []:
+                    target_commit = limb["Commits"][len(limb["Commits"]) - 1] 
+                updated["Commits"].append(hashlib.md5(time_bytes).hexdigest())
+                updated = [updated]
+                branch_exists = True
+                break 
+            else:
+                with open("./.gat/branches.json") as f:
+                    main_data = json.load(f)
+                if main_data[0]["Commits"] == []:
+                    parent = "Main (No commits)"
                 else:
-                    updated = data.copy()
-                    updated.append({
-                        "Name": branch,
-                        "Commits": [hashlib.md5(time_bytes).hexdigest()]
-                     })
+                    parent = main_data[0]["Commits"][len(main_data[0]["Commits"]) - 1]
+                updated = data.copy()
+                updated.append({
+                    "Name": branch,
+                    "Commits": [hashlib.md5(time_bytes).hexdigest()],
+                    "Parent": parent
+                    })
         
         with open("./.gat/branches.json", "w") as f:
-            json.dump(updated, f)
+            json.dump(updated, f, indent=4)
     else:
         existance = False
-    
-
 
     commit = {
     "Name": name,
@@ -80,7 +90,7 @@ def make_commit(branch: str, files: list, name: str, message: str):
     listed_files = []
     diff = None
     for file in files:
-        if branch_commits:
+        if target_commit:
             with open(f"./.gat/commits/{target_commit}") as old_commit:
                 data = json.load(old_commit)
                 for old_file in data["Files"]:
@@ -256,7 +266,11 @@ def status(branch, file):
         data = json.load(f)
     for branches in data:
         if branches["Name"] == branch:
-            target_commit = branches["Commits"][len(branches["Commits"]) - 1]
+            try:
+                target_commit = branches["Commits"][len(branches["Commits"]) - 1]
+            except IndexError:
+                print(f"No commits found in branch '{branch}'")
+                return
     if target_commit is None:
         print(f"Branch '{branch}' not found")
         return
@@ -333,5 +347,57 @@ def find_minimum_edit_distance(source_string, target_string) :
     operations_performed.reverse()
     return operations_performed
 
-init()
-status("Main", "./no.txt")
+def merge(name):
+    readable_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    unix_time = datetime.now().timestamp()
+    time_bytes = str(int(unix_time)).encode("utf-8")
+    time_hash = hashlib.md5(time_bytes).hexdigest()
+    source_data = None
+    if name == "Main":
+        print("Can't merge Main to Main")
+        return
+    with open("./.gat/branches.json") as f:
+        data = json.load(f)
+    main_data = data[0]
+    if len(main_data["Commits"]):
+        main_target_commit = main_data["Commits"][len(main_data["Commits"]) - 1]
+    else:
+        main_target_commit = None
+    for branch in data:
+        if branch["Name"] == name:
+            source_data = branch
+    if source_data is None:
+        print(f"Branch '{name}' not found")
+        return
+    source_target_commit = source_data["Commits"][len(source_data["Commits"]) - 1]
+    if main_target_commit is None:
+        commit_message = fast_forward_merge(source_target_commit)
+    
+    with open(f"./.gat/commits/{hashlib.md5(time_bytes).hexdigest()}", "w") as f:
+        json.dump(commit_message, f, indent=4)
+    with open("./.gat/branches.json") as f:
+        branch_data = json.load(f)
+    branch_data[0]["Commits"].append(time_hash)
+    index = 0
+    final_index = None
+    for branch in branch_data:
+        if branch["Name"] == name:
+            final_index = index
+        index += 1
+    branch_data[final_index]["Commits"].append(time_hash)
+    with open("./.gat/branches.json", "w") as f:
+        json.dump(branch_data, f, indent=4)
+
+def fast_forward_merge(source_hash):
+    with open(f"./.gat/commits/{source_hash}") as f:
+        readable_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        unix_time = datetime.now().timestamp()
+        time_bytes = str(int(unix_time)).encode("utf-8")
+        time_hash = hashlib.md5(time_bytes).hexdigest()
+
+        commit_data = json.load(f)
+        source_hash = commit_data["Hash"]
+        source_files = commit_data["Files"]
+        commit_message = {"Name": f"Merge {source_hash}", "Message": "Autogenerated by gat merge", "Time": readable_time, "Hash": time_hash, "Files": source_files}
+
+merge("Not Main")

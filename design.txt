@@ -38,4 +38,5 @@ Branches:
 [{
     Name: "Branch"
     Commits: []
+    Parent: <hash in branch Main>
 }]
