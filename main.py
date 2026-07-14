@@ -130,55 +130,19 @@ def make_diff(file1: str, file2: str):
             data_new = f.read()
     except UnicodeDecodeError:
         diff = "Unable to generate diff for this file type"
-    original_lines = data_original.split("\n")
-    new_lines = data_new.split("\n")
-
-    if len(original_lines) < len(new_lines):
-        new_longer = True
-    else:
-        new_longer = False
     
-    index = 0
-    
-    if new_longer:
-        length = len(new_lines)
-        difference = length - len(original_lines)
-        while difference > 0:
-            original_lines.append(None)
-            difference -= 1
-    else:
-        length = len(original_lines)
-        difference = length - len(new_lines)
-        while difference > 0:
-            new_lines.append(None)
-            difference -= 1
-    
-    index = 0
-    while index < length:
-        original = original_lines[index]
-        new = new_lines[index]
-        both = (original, new)
-        if original == new: # No need to waste space w/ the same line
-            pass # (Stolen from Gut)
-        else: # There's a change
-            empty = False
-            diff["Line"] = index + 1
-            if None in both: # Add/Remove
-                if original is None:
-                    diff["Type"] = "Add"
-                    diff["Text"] = new
-                else:
-                    diff["Type"] = "Remove"
-                    diff["Text"] = original
-            else: # Modify
-                diff["Type"] = "Modify"
-                diff["Text"] = new
+    original_list = data_original.split("\n")
+    new_list = data_new.split("\n")
         
-            full_diff.append(diff.copy())
-        index += 1
-    
-    if empty:
-        return "No changesv in this file"
+    full_diff_list = find_minimum_edit_distance(original_list, new_list)
+
+    for change in full_diff_list:
+        if change[0] == "INSERT":
+            full_diff.append({"Line": change[2], "Type": "Add", "Text": change[1]})
+        elif change[0] == "SUBSTITUTE":
+            full_diff.append({"Line": change[2], "Type": "Modify", "Text": change[1]})
+        else:
+            full_diff.append({"Line": change[2], "Type": "Delete", "Text": change[1]})
     return full_diff
 
 def make_snapshot(path): # Makes new snapshots or returns existing ones
@@ -303,11 +267,6 @@ def status(branch, file):
             target_snapshot = files["Snapshot"]
     print(make_diff(load_snapshot(target_snapshot), file))
 
-# Costs for the operations
-INS_COST = 1
-DEL_COST = 1
-SUB_COST = 2
-
 def find_minimum_edit_distance(source_string, target_string) :
 
     # Create a dp matrix of dimension (source_string + 1) x (destination_matrix + 1)
@@ -315,9 +274,9 @@ def find_minimum_edit_distance(source_string, target_string) :
 
     # Initialize the required values of the matrix
     for i in range(1, len(target_string) + 1) :
-        dp[i][0] = dp[i - 1][0] + INS_COST
+        dp[i][0] = dp[i - 1][0] + 1
     for i in range(1, len(source_string) + 1) :
-        dp[0][i] = dp[0][i - 1] + DEL_COST
+        dp[0][i] = dp[0][i - 1] + 1
 
     # Maintain the record of opertions done
     # Record is one tuple. Eg : (INSERT, 'a') or (SUBSTITUTE, 'e', 'r') or (DELETE, 'j')
@@ -329,9 +288,9 @@ def find_minimum_edit_distance(source_string, target_string) :
             if source_string[j - 1] == target_string[i - 1] :
                 dp[i][j] = dp[i - 1][j - 1]
             else :
-                dp[i][j] =  min(dp[i - 1][j] + INS_COST, \
-                                dp[i - 1][j - 1] + SUB_COST, \
-                                dp[i][j - 1] + DEL_COST)
+                dp[i][j] =  min(dp[i - 1][j] + 1, \
+                                dp[i - 1][j - 1] + 1, \
+                                dp[i][j - 1] + 1)
 
     # Initialization for backtracking
     i = len(target_string)
@@ -346,72 +305,33 @@ def find_minimum_edit_distance(source_string, target_string) :
             j -= 1
         else :
             # Check if the current element is derived from the upper-left diagonal element
-            if dp[i][j] == dp[i - 1][j - 1] + SUB_COST :
-                operations_performed.append(('SUBSTITUTE', source_string[j - 1], target_string[i - 1]))
+            if dp[i][j] == dp[i - 1][j - 1] + 1 :
+                operations_performed.append(('SUBSTITUTE', source_string[j - 1], target_string[i - 1], i))
                 i -= 1
                 j -= 1
             # Check if the current element is derived from the upper element
-            elif dp[i][j] == dp[i - 1][j] + INS_COST :
-                operations_performed.append(('INSERT', target_string[i - 1]))
+            elif dp[i][j] == dp[i - 1][j] + 1 :
+                operations_performed.append(('INSERT', target_string[i - 1], i))
                 i -= 1
             # Check if the current element is derived from the left element
             else :
-                operations_performed.append(('DELETE', source_string[j - 1]))
+                operations_performed.append(('DELETE', source_string[j - 1], j))
                 j -= 1
 
     # If we reach top-most row of the matrix
     while (j != 0) :
-        operations_performed.append(('DELETE', source_string[j - 1]))
+        operations_performed.append(('DELETE', source_string[j - 1], j))
         j -= 1
 
     # If we reach left-most column of the matrix
     while (i != 0) :
-        operations_performed.append(('INSERT', target_string[i - 1]))
+        operations_performed.append(('INSERT', target_string[i - 1], i))
         i -= 1
 
     # Reverse the list of operations performed as we have operations in reverse
     # order because of backtracking
     operations_performed.reverse()
-    return [dp[len(target_string)][len(source_string)], operations_performed]
-
-
-if __name__ == "__main__":
-
-    # Get the source and target string
-    print("Enter the source string :")
-    source_string = input().strip()
-    print("Enter the target string :")
-    target_string = input().strip()
-
-    # Find the minimum edit distance and the operation performed
-    distance, operations_performed = find_minimum_edit_distance(source_string, target_string)
-
-    # Count the number of individual operations
-    insertions, deletions, substitutions = 0, 0, 0
-    for i in operations_performed :
-        if i[0] == 'INSERT' :
-            insertions += 1
-        elif i[0] == 'DELETE' :
-            deletions += 1
-        else :
-            substitutions += 1
-
-    # Print the results
-    print("Minimum edit distance : {}".format(distance))
-    print("Number of insertions : {}".format(insertions))
-    print("Number of deletions : {}".format(deletions))
-    print("Number of substitutions : {}".format(substitutions))
-    print("Total number of operations : {}".format(insertions + deletions + substitutions))
-
-    print("Actual Operations :")
-    for i in range(len(operations_performed)) :
-
-        if operations_performed[i][0] == 'INSERT' :
-            print("{}) {} : {}".format(i + 1, operations_performed[i][0], operations_performed[i][1]))
-        elif operations_performed[i][0] == 'DELETE' :
-            print("{}) {} : {}".format(i + 1, operations_performed[i][0], operations_performed[i][1]))
-        else :
-            print("{}) {} : {} by {}".format(i + 1, operations_performed[i][0], operations_performed[i][1], operations_performed[i][2]))
+    return operations_performed
 
 init()
 status("Main", "./no.txt")
