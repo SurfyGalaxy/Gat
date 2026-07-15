@@ -461,8 +461,43 @@ def three_way_merge(main_hash, source_hash):
                 source_diff_lines.add(change[2])
         
         conflicting_diff_lines = main_diff_lines & source_diff_lines
+        non_conflicting_lines = main_diff_lines ^ source_diff_lines
         if len(conflicting_diff_lines):
-            print(f"Merge conflicts on lines {conflicting_diff_lines}")
+            temp = conflicting_diff_lines
+            unresolved = set()
+            for conflicting_line in conflicting_diff_lines:
+                for main in main_ancestor_diff:
+                    if main[0] == "SUBSTITUTE":
+                        line = main[3]
+                    else:
+                        line = main[2]
+                    if line == conflicting_line:
+                        main_conflict = main
+                for source in source_ancestor_diff:
+                    if source[0] == "SUBSTITUTE":
+                        line = source[3]
+                    else:
+                        line = source[2]
+                    if line == conflicting_line:
+                        source_conflict = source
+                
+                if source_conflict == main_conflict:
+                    temp.remove(conflicting_line)
+                else:
+                    unresolved.add(f(source_conflict, main_conflict))
+
+            if len(temp):
+                for item in unresolved:
+                    print(f"Conflict: Keep the branch ({item[0]}), or Keep the Main ({item[1]})\n")
+                    e = True
+                    while e:
+                        answer = input("Branch or Main?").lower()
+                        if answer == "main":
+                            e = False
+                        elif answer == "branch":
+                            e = False
+
+
 
 init()
 three_way_merge("cfe9f10443432a720f6134351301d62d", "ce2eead72a214b543c9e362af19fd630")
