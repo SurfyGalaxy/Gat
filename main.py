@@ -297,6 +297,7 @@ def find_minimum_edit_distance(source_string, target_string) :
     operations_performed = []
 
     # Build the matrix following the algorithm
+    print("Building matrix")
     for i in range(1, len(target_string) + 1) :
         for j in range(1, len(source_string) + 1) :
             if source_string[j - 1] == target_string[i - 1] :
@@ -407,9 +408,18 @@ def three_way_merge(main_hash, source_hash):
         main_data = json.load(f)
     with open(f"./.gat/commits/{source_hash}") as f:
         source_data = json.load(f)
+    with open("./.gat/branches.json") as f:
+        data = json.load(f)
+    for branch in data:
+        if source_hash in branch["Commits"]:
+            ancestor_hash = branch["Parent"]
     
+    with open(f"./.gat/commits/{ancestor_hash}") as f:
+        ancestor_data = json.load(f)
+
     main_files = main_data["Files"]
     source_files = source_data["Files"]
+    ancestor_files = ancestor_data["Files"]
 
     main_file_set = set()
     source_file_set = set()
@@ -425,9 +435,34 @@ def three_way_merge(main_hash, source_hash):
     for path in shared_set:
         for file in  main_files: # generate a list of diffs (it's midnight i need comments to think)
             if file["Path"] == path:
-                with open(f"./.gat/snapshots/{file["Snapshot"]}", "rb") as f:
-                    
-        pass 
+                main_snapshot = load_snapshot(file["Snapshot"])
+        for file in ancestor_files:
+            if file["Path"] == path:
+                ancestor_snapshot = load_snapshot(file["Snapshot"])
+        for file in source_files:
+            if file["Path"] == path:
+                source_snapshot = load_snapshot(file["Snapshot"])
+        
+        main_ancestor_diff = find_minimum_edit_distance(ancestor_snapshot.splitlines(), main_snapshot.splitlines())
+        source_ancestor_diff = find_minimum_edit_distance(ancestor_snapshot.splitlines(), source_snapshot.splitlines())
+        
+        main_diff_lines = set()
+        source_diff_lines = set()
+
+        for change in main_ancestor_diff:
+            if change[0] == "SUBSTITUTE":
+                main_diff_lines.add(change[3])
+            else:
+                main_diff_lines.add(change[2])
+        for change in source_ancestor_diff:
+            if change[0] == "SUBSTITUTE":
+                source_diff_lines.add(change[3])
+            else:
+                source_diff_lines.add(change[2])
+        
+        conflicting_diff_lines = main_diff_lines & source_diff_lines
+        if len(conflicting_diff_lines):
+            print(f"Merge conflicts on lines {conflicting_diff_lines}")
 
 init()
-three_way_merge("15901955eff2838e5576caa06f6bba3a", "ce2eead72a214b543c9e362af19fd630")
+three_way_merge("cfe9f10443432a720f6134351301d62d", "ce2eead72a214b543c9e362af19fd630")
