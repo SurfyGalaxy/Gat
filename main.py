@@ -39,6 +39,7 @@ def init():
         json.dump([{"Name": "Main", "Commits": [], "Parent": None}], f, indent=4)
 
 def make_commit(branch: str, files: list, name: str, message: str):
+    print("Making ")
     existance = True
     target_commit = None
     branch_commits = None
@@ -74,11 +75,6 @@ def make_commit(branch: str, files: list, name: str, message: str):
                     "Commits": [hashlib.md5(time_bytes).hexdigest()],
                     "Parent": parent
                     })
-        
-        with open("./.gat/branches.json", "w") as f:
-            json.dump(updated, f, indent=4)
-    else:
-        existance = False
 
     commit = {
     "Name": name,
@@ -93,12 +89,14 @@ def make_commit(branch: str, files: list, name: str, message: str):
         if target_commit:
             with open(f"./.gat/commits/{target_commit}") as old_commit:
                 data = json.load(old_commit)
-                for old_file in data["Files"]:
-                    path = Path(old_file["Path"])
-                    if str(path) == str(file):
-                        snapshots = old_file["Snapshot"]
-                        snapshot = load_snapshot(snapshots)
-                        diff = make_diff(snapshot, file)
+            for old_file in data["Files"]:
+                path = Path(old_file["Path"])
+                if str(path) == str(file):
+                    snapshots = old_file["Snapshot"]
+                    snapshot = load_snapshot(snapshots)
+                    with open(f"./{file}") as f:
+                        text = f.read()
+                    diff = find_minimum_edit_distance(snapshot.splitlines(), text.splitlines())
 
         if diff is None:
             diff = "No diff available for this file"
@@ -111,14 +109,16 @@ def make_commit(branch: str, files: list, name: str, message: str):
         }
         listed_files.append(file_dict.copy())
     commit["Files"] = listed_files
+    print(commit)
 
-    with open(f"./.gat/commits/{commit["Hash"]}", "w") as f:
+    with open(f"./.gat/commits/{commit['Hash']}", "w") as f:
         json.dump(commit, f, indent=4)
+    with open(f"./.gat/commits/{commit['Hash']}") as f:
+        print(json.load(f))
 
-    
-    if not existance:
-        with open("./.gat/branches.json", "w") as f:
-            json.dump([{"Name": branch, "Commits": [commit["Hash"]]}], f)
+    print(updated)
+    with open("./.gat/branches.json", "w") as f:
+            json.dump(updated, f, indent=4)
     return commit["Hash"]
 
 def make_diff(file1: str, file2: str):
@@ -321,26 +321,45 @@ def find_minimum_edit_distance(source_string, target_string) :
         else :
             # Check if the current element is derived from the upper-left diagonal element
             if dp[i][j] == dp[i - 1][j - 1] + 1 :
-                operations_performed.append(('SUBSTITUTE', source_string[j - 1], target_string[i - 1], i))
+                operations_performed.append(({
+                    "Type": "SUBSTITUTE",
+                    "Original Text": source_string[j - 1],
+                    "New Text": target_string[i - 1],
+                    "Line": i
+                    }) )
                 i -= 1
                 j -= 1
             # Check if the current element is derived from the upper element
             elif dp[i][j] == dp[i - 1][j] + 1 :
-                operations_performed.append(('INSERT', target_string[i - 1], i))
+                operations_performed.append({
+            "Type": "INSERT",
+            "Text": target_string[i - 1],
+            "Line": i
+            })
                 i -= 1
             # Check if the current element is derived from the left element
             else :
-                operations_performed.append(('DELETE', source_string[j - 1], j))
+                operations_performed.append({
+            "Type": "DELETE", 
+            "Text": source_string[j - 1],
+            "Line": j})
                 j -= 1
 
     # If we reach top-most row of the matrix
     while (j != 0) :
-        operations_performed.append(('DELETE', source_string[j - 1], j))
+        operations_performed.append({
+            "Type": "DELETE", 
+            "Text": source_string[j - 1],
+            "Line": j})
         j -= 1
 
     # If we reach left-most column of the matrix
     while (i != 0) :
-        operations_performed.append(('INSERT', target_string[i - 1], i))
+        operations_performed.append({
+            "Type": "INSERT",
+            "Text": target_string[i - 1],
+            "Line": i
+            }) 
         i -= 1
 
     # Reverse the list of operations performed as we have operations in reverse
@@ -375,21 +394,12 @@ def merge(name):
         commit_message = fast_forward_merge(source_target_commit)
     else:
         commit_message = three_way_merge(main_target_commit, source_target_commit)
-    
-    with open(f"./.gat/commits/{hashlib.md5(time_bytes).hexdigest()}", "w") as f:
-        json.dump(commit_message, f, indent=4)
+
     with open("./.gat/branches.json") as f:
         branch_data = json.load(f)
     branch_data[0]["Commits"].append(time_hash)
     index = 0
     final_index = None
-    for branch in branch_data:
-        if branch["Name"] == name:
-            final_index = index
-        index += 1
-    branch_data[final_index]["Commits"].append(time_hash)
-    with open("./.gat/branches.json", "w") as f:
-        json.dump(branch_data, f, indent=4)
 
 def fast_forward_merge(source_hash):
     with open(f"./.gat/commits/{source_hash}") as f:
@@ -401,9 +411,13 @@ def fast_forward_merge(source_hash):
         commit_data = json.load(f)
         source_hash = commit_data["Hash"]
         source_files = commit_data["Files"]
-        commit_message = {"Name": f"Merge {source_hash}", "Message": "Autogenerated by gat merge", "Time": readable_time, "Hash": time_hash, "Files": source_files}
+        make_commit("Main", source_files, f"Merge {source_hash}", "Autogenerated by gat merge")
 
 def three_way_merge(main_hash, source_hash):
+    readable_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    unix_time = datetime.now().timestamp()
+    time_bytes = str(int(unix_time)).encode("utf-8")
+    time_hash = hashlib.md5(time_bytes).hexdigest()
     with open(f"./.gat/commits/{main_hash}") as f:
         main_data = json.load(f)
     with open(f"./.gat/commits/{source_hash}") as f:
@@ -416,6 +430,7 @@ def three_way_merge(main_hash, source_hash):
     
     with open(f"./.gat/commits/{ancestor_hash}") as f:
         ancestor_data = json.load(f)
+    print(main_data)
 
     main_files = main_data["Files"]
     source_files = source_data["Files"]
@@ -431,6 +446,8 @@ def three_way_merge(main_hash, source_hash):
     shared_set = main_file_set & source_file_set
     new_set = source_file_set - main_file_set
     deleted_set = main_file_set - source_file_set
+
+    files = []
     
     for path in shared_set:
         for file in  main_files: # generate a list of diffs (it's midnight i need comments to think)
@@ -446,58 +463,107 @@ def three_way_merge(main_hash, source_hash):
         main_ancestor_diff = find_minimum_edit_distance(ancestor_snapshot.splitlines(), main_snapshot.splitlines())
         source_ancestor_diff = find_minimum_edit_distance(ancestor_snapshot.splitlines(), source_snapshot.splitlines())
         
-        main_diff_lines = set()
-        source_diff_lines = set()
-
-        for change in main_ancestor_diff:
-            if change[0] == "SUBSTITUTE":
-                main_diff_lines.add(change[3])
-            else:
-                main_diff_lines.add(change[2])
-        for change in source_ancestor_diff:
-            if change[0] == "SUBSTITUTE":
-                source_diff_lines.add(change[3])
-            else:
-                source_diff_lines.add(change[2])
+        main_set = set()
+        source_set = set()
+        for diff in main_ancestor_diff:
+            main_set.add(diff["Line"])
+        for diff in source_ancestor_diff:
+            source_set.add(diff["Line"])
         
-        conflicting_diff_lines = main_diff_lines & source_diff_lines
-        non_conflicting_lines = main_diff_lines ^ source_diff_lines
-        if len(conflicting_diff_lines):
-            temp = conflicting_diff_lines
-            unresolved = set()
-            for conflicting_line in conflicting_diff_lines:
-                for main in main_ancestor_diff:
-                    if main[0] == "SUBSTITUTE":
-                        line = main[3]
-                    else:
-                        line = main[2]
-                    if line == conflicting_line:
-                        main_conflict = main
-                for source in source_ancestor_diff:
-                    if source[0] == "SUBSTITUTE":
-                        line = source[3]
-                    else:
-                        line = source[2]
-                    if line == conflicting_line:
-                        source_conflict = source
-                
-                if source_conflict == main_conflict:
-                    temp.remove(conflicting_line)
-                else:
-                    unresolved.add(f(source_conflict, main_conflict))
+        unique_lines = main_set ^ source_set
 
-            if len(temp):
-                for item in unresolved:
-                    print(f"Conflict: Keep the branch ({item[0]}), or Keep the Main ({item[1]})\n")
-                    e = True
-                    while e:
-                        answer = input("Branch or Main?").lower()
-                        if answer == "main":
-                            e = False
-                        elif answer == "branch":
-                            e = False
+        unique_diffs = []
+        conflicting_diffs_unpaired = []
 
+        for diff in main_ancestor_diff:
+            if diff["Line"] in unique_lines:
+                unique_diffs.append(diff)
+            else:
+                conflicting_diffs_unpaired.append(diff)
+
+        for diff in source_ancestor_diff:
+            if diff["Line"] in unique_lines:
+                unique_diffs.append(diff)
+            else:
+                conflicting_diffs_unpaired.append(diff)
+
+        conflicting_diffs = pair_diffs(conflicting_diffs_unpaired)
+        if len(conflicting_diffs):
+            print(f"{len(conflicting_diffs)} conflicts found")
+            for diffs in conflicting_diffs:
+                try:
+                    line = diffs[0][0]["Line"]
+                except KeyError:
+                    line = diffs[0]["Line"]
+                print(f"Merge conflict at line {line}: Keep A ({diffs[0]}) or B ({diffs[1]})")
+                e = True
+                while e:
+                    answer = input("A or B? ").lower()
+                    if answer == "a":
+                        unique_diffs.append(diffs[0])
+                        e = False
+                    elif answer == "b":
+                        unique_diffs.append(diffs[1])
+                        e = False
+                    else:
+                        print(f"{answer} isn't A or B")
+
+        new_file = apply_diffs(ancestor_snapshot, unique_diffs)
+        new_text = "\n".join(new_file)
+        with open(path, "w") as f:
+            f.write(new_text)
+        
+        files.append(str(Path(path)))
+        
+    make_commit("Main", files, f"Merge {source_hash}", "Autogenerated by gat merge")
+
+def pair_diffs(diffs):
+    paired = []
+    unpaired = []
+    for diff in diffs:
+        done = False
+        for unpaired_diff in unpaired:
+            if not done:
+                if unpaired_diff["Line"] == diff["Line"]:
+                    paired.append((diff, unpaired_diff))
+                    done = True
+        if not done:
+            unpaired.append(diff)
+
+    return (paired)
+
+def apply_diffs(text, diffs):
+    text = text.splitlines()
+    deletions = []
+    additions = []
+
+    for diff in diffs:
+        if diff["Type"] == "SUBSTITUTE":
+            deletions.append({
+                "Type": "DELETE",
+                "Text": diff["Original Text"],
+                "Line": diff["Line"]
+            })
+            additions.append({
+                "Type": "INSERT",
+                "Text": diff["New Text"],
+                "Line": diff["Line"]
+            })
+        elif diff["Type"] == "INSERT":
+            additions.append(diff)
+        else: # DELETE
+            deletions.append(diff)
+
+    deletions.sort(key=lambda x: x["Line"], reverse=True)
+    additions.sort(key=lambda x: x["Line"])
+
+    for deletion in deletions:
+        del text[deletion["Line"] - 1]
+    for addition in additions:
+        text.insert(addition["Line"] - 1, addition["Text"])
+    
+    return text
 
 
 init()
-three_way_merge("cfe9f10443432a720f6134351301d62d", "ce2eead72a214b543c9e362af19fd630")
+merge("The Missile Knows")
