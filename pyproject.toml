@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gat_vcs"
-version = "0.1.0"
+version = "0.1.1"
 description = "A very broken VCS"
 readme = "README.md"
 requires-python = ">=3.8"
