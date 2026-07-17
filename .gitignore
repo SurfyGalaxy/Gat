@@ -1,3 +1,7 @@
 *.zst
 venv/
+src/gat/__pycache__/
+src/gat/gat_vcs.egg-info/
+src/gat/test/
+dist/
 .gat/

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gat_vcs"
+version = "0.1.0"
+description = "A very broken VCS"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{name = "SurfyGalaxy", email = "surfygalaxy@proton.me"}]
+
+dependencies = [                # List your project's dependencies here
+    "requests>=2.28.0",
+    "click>=8.0.0",
+    "zstandard>=0.18.0"
+]
+
+[project.scripts]
+gat = "gat.main:cli"

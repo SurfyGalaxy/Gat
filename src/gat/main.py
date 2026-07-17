@@ -23,6 +23,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import sys
+import click
 from datetime import datetime
 from pathlib import Path
 import argparse
@@ -30,7 +32,15 @@ import hashlib
 import json
 import zstandard as zstd # because we don't want too too much disk space taken up
 
+@click.group()
+@click.version_option(version="1.0.0", prog_name="gat")
+def cli():
+    """gat - A waste of disk space"""
+    pass
+
+@cli.command()
 def init():
+    """Initialise the repository. Only needed to be ran when you first initialise the repository"""
     Path("./.gat/snapshots").mkdir(parents=True, exist_ok=True)
     Path("./.gat/commits").mkdir(parents=True, exist_ok=True)
     if Path("./.gat/branches.json").is_file():
@@ -38,8 +48,25 @@ def init():
     with open("./.gat/branches.json", "w") as f:
         json.dump([{"Name": "Main", "Commits": [], "Parent": None}], f, indent=4)
 
+@cli.command()
+@click.argument("branch")
+@click.argument("files", nargs=-1, required=True)
+@click.option("--name", "-n", required=True, help="Commit name")
+@click.option("--message", "-m", required=True, help="Commit message")
+def commit(branch, files, name, message):
+    """Make a new commit on branch <branch>, with the files <[files]>"""
+    result = make_commit(branch, files, name, message)
+    if result is not None:
+        print(f"Made a new commit: Commit {result}")
+
 def make_commit(branch: str, files: list, name: str, message: str):
-    print("Making ")
+    missing_files = []
+    for file in files:
+        if not Path(file).exists():
+            missing_files.append(file)
+    if missing_files:
+        print(f"{len(missing_files)} missing paths detected: {missing_files}")
+        return
     existance = True
     target_commit = None
     branch_commits = None
@@ -48,33 +75,37 @@ def make_commit(branch: str, files: list, name: str, message: str):
     unix_time = datetime.now().timestamp()
     time_bytes = str(int(unix_time)).encode("utf-8")
 
-    updated = []
     if Path("./.gat/branches.json").is_file():
         with open("./.gat/branches.json", "r") as f:
             data = json.load(f)
+        
+        updated = data.copy()  # Start with ALL branches
+        branch_exists = False
+        
         for limb in data:
             if limb["Name"] == branch:
-                updated = limb.copy()
-                branch_commits = limb["Commits"]
-                if branch_commits != []:
-                    target_commit = limb["Commits"][len(limb["Commits"]) - 1] 
-                updated["Commits"].append(hashlib.md5(time_bytes).hexdigest())
-                updated = [updated]
                 branch_exists = True
-                break 
+                # Modify the existing branch
+                for item in updated:
+                    if item["Name"] == branch:
+                        item["Commits"].append(hashlib.md5(time_bytes).hexdigest())
+                        break
+                break
+        
+        if not branch_exists:
+            # Add new branch
+            if data[0]["Commits"] == []:
+                parent = "Main (No commits)"
             else:
-                with open("./.gat/branches.json") as f:
-                    main_data = json.load(f)
-                if main_data[0]["Commits"] == []:
-                    parent = "Main (No commits)"
-                else:
-                    parent = main_data[0]["Commits"][len(main_data[0]["Commits"]) - 1]
-                updated = data.copy()
-                updated.append({
-                    "Name": branch,
-                    "Commits": [hashlib.md5(time_bytes).hexdigest()],
-                    "Parent": parent
-                    })
+                parent = data[0]["Commits"][len(data[0]["Commits"]) - 1]
+            updated.append({
+                "Name": branch,
+                "Commits": [hashlib.md5(time_bytes).hexdigest()],
+                "Parent": parent
+            })
+        
+        with open("./.gat/branches.json", "w") as f:
+            json.dump(updated, f, indent=4)
 
     commit = {
     "Name": name,
@@ -109,14 +140,10 @@ def make_commit(branch: str, files: list, name: str, message: str):
         }
         listed_files.append(file_dict.copy())
     commit["Files"] = listed_files
-    print(commit)
 
     with open(f"./.gat/commits/{commit['Hash']}", "w") as f:
         json.dump(commit, f, indent=4)
-    with open(f"./.gat/commits/{commit['Hash']}") as f:
-        print(json.load(f))
-
-    print(updated)
+    
     with open("./.gat/branches.json", "w") as f:
             json.dump(updated, f, indent=4)
     return commit["Hash"]
@@ -177,7 +204,10 @@ def load_snapshot(name):
     processed = decompressor.decompress(data).decode("utf-8")
     return processed
 
+@cli.command()
+@click.argument("commit")
 def change(commit):
+    """Load the commit with the hash <commit>"""
     with open(f"./.gat/commits/{commit}") as f:
         data = json.load(f)
     for file in data["Files"]:
@@ -188,6 +218,12 @@ def change(commit):
         with open(destination, "w") as f:
             f.write(file_data)
 
+@cli.command()
+@click.argument("branch")
+@click.argument("name")
+def goto(branch, name):
+    """Load commit <name> from branch <branch>"""
+    goto_via_name(branch, name)
 def goto_via_name(branch, name):
     branch_found = False
     commit_list = []
@@ -217,8 +253,10 @@ Commits found:
         print(f"Branch '{branch}' not found")
                 
             
-
+@cli.command()
+@click.argument("branch")
 def list_commits(branch):
+    """Lists every commit on a branch, but only it's name and hash"""
     commit_list = []
     with open("./.gat/branches.json") as f:
         data = json.load(f)
@@ -230,17 +268,24 @@ def list_commits(branch):
                     commit_data = json.load(f)
                 name = commit_data["Name"]
                 commit_list.append(f"{name} ({hashes})")
+    print(commit_list)
     return commit_list
 
+@cli.command()
 def list_branches():
+    """List every branch's name"""
     with open("./.gat/branches.json") as f:
         data = json.load(f)
     branches = []
     for branch in data:
         branches.append(branch["Name"])
+    print(branches)
     return branches
 
+@cli.command()
+@click.argument("name")
 def log(name):
+    """Show every commit in branch <name>, aswell as some metadata"""
     commits = []
     with open("./.gat/branches.json") as f:
         data = json.load(f)
@@ -254,13 +299,17 @@ def log(name):
             data = json.load(f)
             print(
 f"""Commit {data["Hash"]}:
-  Name: {data["Name"]}
-  Created on: {data["Time"]}
-  Message: {data["Message"]}
-  Files: {', '.join([f['Path'] for f in data['Files']])}
-  """)
+Name: {data["Name"]}
+Created on: {data["Time"]}
+Message: {data["Message"]}
+Files: {', '.join([f['Path'] for f in data['Files']])}
+""")
 
+@cli.command()
+@click.argument("branch")
+@click.argument("file", type=click.Path(exists=True))
 def status(branch, file):
+    """Compare file <file> with the latest commit on branch <branch>"""
     target_commit = None
     with open("./.gat/branches.json") as f:
         data = json.load(f)
@@ -367,7 +416,10 @@ def find_minimum_edit_distance(source_string, target_string) :
     operations_performed.reverse()
     return operations_performed
 
+@cli.command()
+@click.argument("branch")
 def merge(name):
+    """Merge branch <branch> into Main"""
     readable_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     unix_time = datetime.now().timestamp()
     time_bytes = str(int(unix_time)).encode("utf-8")
@@ -564,6 +616,5 @@ def apply_diffs(text, diffs):
     
     return text
 
-
-init()
-merge("The Missile Knows")
+if __name__ == "__main__":
+    cli()
